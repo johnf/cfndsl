@@ -11,7 +11,7 @@ Metrics/PerceivedComplexity:
 
 # TODO Temp fix this
 Metrics/AbcSize:
-  Max: 92
+  Max: 94
 
 Metrics/MethodLength:
   Max: 25

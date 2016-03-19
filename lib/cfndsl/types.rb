@@ -5,7 +5,6 @@ require 'cfndsl/names'
 require 'cfndsl/types'
 
 module CfnDsl
-  # rubocop:disable Metrics/ModuleLength
   module Types
     # rubocop:disable Metrics/MethodLength
     def self.included(type_def)
@@ -14,27 +13,20 @@ module CfnDsl
 
       # Do a little sanity checking - all of the types referenced in Resources
       # should be represented in Types
-      types_list['Resources'].keys.each do |resource_name|
-        resource = types_list['Resources'][resource_name]
+      types_list['Resources'].values.each do |resource|
         resource.values.each do |thing|
-          thing.values.each do |type|
-            if type.is_a?(Array)
-              type.each do |inner_type|
-                puts "unknown type #{inner_type}" unless types_list['Types'].key?(inner_type)
-              end
-            else
-              puts "unknown type #{type}" unless types_list['Types'].key?(type)
-            end
+          thing.values.flatten.each do |type|
+            puts "unknown type #{type}" unless types_list['Types'].key?(type)
           end
         end
       end
 
       # All of the type values should also be references
-      types_list['Types'].values do |type|
-        if type.respond_to?(:values)
-          type.values.each do |tv|
-            puts "unknown type #{tv}" unless types_list['Types'].key?(tv)
-          end
+      types_list['Types'].values.each do |type|
+        next unless type.respond_to?(:values)
+
+        type.values.flatten.each do |tv|
+          puts "unknown type #{tv}" unless types_list['Types'].key?(tv)
         end
       end
 
@@ -42,12 +34,15 @@ module CfnDsl
 
       # Go through and declare all of the types first
       types_list['Types'].each_key do |typename|
-        if !type_def.const_defined?(typename)
-          klass = type_def.const_set(typename, Class.new(type_def::Type))
-          classes[typename] = klass
-        else
-          classes[typename] = type_def.const_get(typename)
+        next if %w(String JSON Integer).include?(typename)
+
+        if type_def.const_defined?(typename)
+          puts "duplicate type #{typename}"
+          next
         end
+
+        klass = type_def.const_set(typename, Class.new(type_def::Type))
+        classes[typename] = klass
       end
 
       # Now go through them again and define attribute setter methods
@@ -147,5 +142,4 @@ module CfnDsl
     end
     # rubocop:enable Metrics/MethodLength
   end
-  # rubocop:enable Metrics/ModuleLength
 end
