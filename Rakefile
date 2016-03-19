@@ -1,8 +1,11 @@
+require 'net/http'
+require 'pathname'
+
 require 'bundler/gem_tasks'
 require 'rspec/core/rake_task'
 require 'cfndsl/version'
+require 'cfndsl'
 require 'rubocop/rake_task'
-require 'net/http'
 
 RSpec::Core::RakeTask.new
 RuboCop::RakeTask.new
@@ -67,5 +70,16 @@ task :fetch_aws_schema do
         end
       end
     end
+  end
+end
+
+task :update_tests do
+  filenames = Pathname.glob("#{File.dirname(__FILE__)}/spec/fixtures/aws/*.rb")
+  filenames.each do |filename|
+    json_filename = filename.sub(/\.rb$/, '.json')
+
+    data = CfnDsl.eval_file_with_extras(filename.to_s) || {}
+    json = JSON.pretty_generate(data)
+    json_filename.write(json)
   end
 end

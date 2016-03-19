@@ -1,0 +1,15 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Parameters": {
+    "One": {
+      "Type": "String",
+      "Default": "Test",
+      "MaxLength": 15,
+      "MaxValue": 15,
+      "AllowedValues": [
+        "one",
+        "two"
+      ]
+    }
+  }
+}

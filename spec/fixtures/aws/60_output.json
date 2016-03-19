@@ -1,0 +1,20 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Outputs": {
+    "IP": {
+      "Value": "Foo"
+    },
+    "IP2": {
+      "Value": "Foo",
+      "Description": "Moo"
+    }
+  },
+  "Resources": {
+    "MyInstance": {
+      "Properties": {
+        "ImageId": "ami-14341342"
+      },
+      "Type": "AWS::EC2::Instance"
+    }
+  }
+}

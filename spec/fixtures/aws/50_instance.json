@@ -1,0 +1,11 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "MyInstance": {
+      "Properties": {
+        "ImageId": "ami-14341342"
+      },
+      "Type": "AWS::EC2::Instance"
+    }
+  }
+}

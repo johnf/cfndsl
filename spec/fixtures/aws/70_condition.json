@@ -1,0 +1,13 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Conditions": {
+    "OneIsTest": {
+      "Fn::Equals": [
+        {
+          "Ref": "One"
+        },
+        "Test"
+      ]
+    }
+  }
+}
