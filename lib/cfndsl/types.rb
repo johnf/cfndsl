@@ -42,12 +42,15 @@ module CfnDsl
 
       # Go through and declare all of the types first
       types_list['Types'].each_key do |typename|
-        if !type_def.const_defined?(typename)
-          klass = type_def.const_set(typename, Class.new(type_def::Type))
-          classes[typename] = klass
-        else
-          classes[typename] = type_def.const_get(typename)
+        next if %w(String JSON Integer).include?(typename)
+
+        if type_def.const_defined?(typename)
+          puts "duplicate type #{typename}"
+          next
         end
+
+        klass = type_def.const_set(typename, Class.new(type_def::Type))
+        classes[typename] = klass
       end
 
       # Now go through them again and define attribute setter methods
