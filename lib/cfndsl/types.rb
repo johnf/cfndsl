@@ -30,11 +30,11 @@ module CfnDsl
       end
 
       # All of the type values should also be references
-      types_list['Types'].values do |type|
-        if type.respond_to?(:values)
-          type.values.each do |tv|
-            puts "unknown type #{tv}" unless types_list['Types'].key?(tv)
-          end
+      types_list['Types'].values.each do |type|
+        next unless type.respond_to?(:values)
+
+        type.values.flatten.each do |tv|
+          puts "unknown type #{tv}" unless types_list['Types'].key?(tv)
         end
       end
 
