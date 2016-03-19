@@ -5,7 +5,6 @@ require 'cfndsl/names'
 require 'cfndsl/types'
 
 module CfnDsl
-  # rubocop:disable Metrics/ModuleLength
   module Types
     # rubocop:disable Metrics/MethodLength
     def self.included(type_def)
@@ -14,17 +13,10 @@ module CfnDsl
 
       # Do a little sanity checking - all of the types referenced in Resources
       # should be represented in Types
-      types_list['Resources'].keys.each do |resource_name|
-        resource = types_list['Resources'][resource_name]
+      types_list['Resources'].values.each do |resource|
         resource.values.each do |thing|
-          thing.values.each do |type|
-            if type.is_a?(Array)
-              type.each do |inner_type|
-                puts "unknown type #{inner_type}" unless types_list['Types'].key?(inner_type)
-              end
-            else
-              puts "unknown type #{type}" unless types_list['Types'].key?(type)
-            end
+          thing.values.flatten.each do |type|
+            puts "unknown type #{type}" unless types_list['Types'].key?(type)
           end
         end
       end
@@ -150,5 +142,4 @@ module CfnDsl
     end
     # rubocop:enable Metrics/MethodLength
   end
-  # rubocop:enable Metrics/ModuleLength
 end
