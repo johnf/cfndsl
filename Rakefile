@@ -2,6 +2,7 @@ require 'bundler/gem_tasks'
 require 'rspec/core/rake_task'
 require 'cfndsl/version'
 require 'rubocop/rake_task'
+require 'net/http'
 
 RSpec::Core::RakeTask.new
 RuboCop::RakeTask.new
@@ -50,4 +51,21 @@ task :bump, :type do |_, args|
   `git push origin v#{version}`
 
   puts 'All done, travis should pick up and release the gem now!'
+end
+
+desc 'Update AWS Schema'
+task :fetch_aws_schema do
+  uri = URI.parse('http://vstoolkit.amazonwebservices.com/CloudFormationSchema/CloudFormationV1.schema')
+
+  Net::HTTP.start(uri.host, uri.port) do |http|
+    request = Net::HTTP::Get.new(uri)
+
+    http.request request do |response|
+      open('data/aws/CloudFormationV1.schema', 'w') do |f|
+        response.read_body do |chunk|
+          f.write(chunk)
+        end
+      end
+    end
+  end
 end
