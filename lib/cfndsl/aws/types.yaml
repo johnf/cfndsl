@@ -817,6 +817,7 @@ Resources:
       ApplicationName: String
   "AWS::CodeDeploy::DeploymentConfig" :
     Properties:
+      DeploymentGroupName: String
       MinimumHealthyHosts: CDMinimumHealthyHosts
       DeploymentConfigName: String
   "AWS::CodeDeploy::DeploymentGroup" :
