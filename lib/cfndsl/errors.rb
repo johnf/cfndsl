@@ -1,17 +1,17 @@
 module CfnDsl
   # Keeps track of errors
   module Errors
+    SOURCE_DIR = File.dirname(__FILE__)
+
     @errors = []
 
-    def self.error(err, idx = nil)
-      if idx.nil?
-        @errors.push(err + "\n" + caller.join("\n") + "\n")
-      else
-        m = caller[idx].match(/^.*?:\d+:/)
-        err_loc = m ? m[0] : caller[idx]
+    def self.error(err, kaller)
+      kaller = kaller.keep_if { |line| line !~ /^#{SOURCE_DIR}/ }
 
-        @errors.push(err_loc + ' ' + err + "\n")
-      end
+      m = kaller[0].match(/^.*?:\d+:/)
+      err_loc = m ? m[0] : kaller[0]
+
+      @errors.push(err_loc + ' ' + err)
     end
 
     def self.clear
@@ -20,6 +20,12 @@ module CfnDsl
 
     def self.errors
       @errors
+    end
+
+    def self.output_errors
+      $stderr.puts "Errors: \n"
+      $stderr.puts @errors.join("\n")
+      $stderr.puts
     end
 
     def self.errors?

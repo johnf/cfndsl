@@ -32,8 +32,8 @@ describe CfnDsl::CloudFormationTemplate do
   end
 
   it 'allows the format version to be set' do
-    subject.AWSTemplateFormatVersion 'AAAAAA'
-    expect(subject.to_json).to eq('{"AWSTemplateFormatVersion":"AAAAAA"}')
+    subject.AWSTemplateFormatVersion '2010-09-09'
+    expect(subject.to_json).to eq('{"AWSTemplateFormatVersion":"2010-09-09"}')
   end
 
   it 'sets output values' do
@@ -43,8 +43,8 @@ describe CfnDsl::CloudFormationTemplate do
     end
     spec = self
     out.declare do
-      spec.expect(@Value).to spec.eq('value')
-      spec.expect(@Description).to spec.eq('desc')
+      spec.expect(@Value.as_json).to spec.eq('value')
+      spec.expect(@Description.as_json).to spec.eq('desc')
     end
     subject.declare do
       spec.expect(@Outputs.length).to spec.eq(1)

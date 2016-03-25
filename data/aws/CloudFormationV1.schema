@@ -5196,6 +5196,12 @@
             "required": false,
             "description": "The ID of a NAT instance in your VPC. For example, \"i-1a2b3c4d\". Required: Conditional. You must provide only one of the following: a GatewayID, InstanceID, or NetworkInterfaceId."
           },
+          "NatGatewayId": {
+            "type": "String",
+            "resource-ref-type": "AWS::EC2::NatGateway",
+            "required": false,
+            "description": "The ID of a NAT gateway. For example, nat-0a12bc456789de0fg."
+          },
           "NetworkInterfaceId": {
             "type": "String",
             "resource-ref-type": "AWS::EC2::NetworkInterface",
