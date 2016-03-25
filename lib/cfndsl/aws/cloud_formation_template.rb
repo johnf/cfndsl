@@ -10,6 +10,7 @@ require 'cfndsl/types/named_string'
 require 'cfndsl/types/named_array'
 require 'cfndsl/types/output'
 require 'cfndsl/types/mapping'
+require 'cfndsl/types/condition'
 
 module CfnDsl
   # Cloud Formation Templates
@@ -31,8 +32,6 @@ module CfnDsl
 
     def self.create_properties(object, parent_klass)
       object['properties'].each do |property_name, property|
-        next if %w(Resources).include?(property_name) # TODO: implement these
-
         create_property(parent_klass, property_name, property)
       end
     end
@@ -42,12 +41,10 @@ module CfnDsl
 
       parent_klass.add_required(property_name) if property.delete('required')
       parent_klass.add_description(property_name, property.delete('description'))
-      # TODO: what can we do with these
-      _disable_refs = property.delete('disable-refs')
-      _disable_functions = property.delete('disable-functions')
 
       case type
-      when 'String', 'Number', 'Json'
+      when 'String', 'Number', 'Json', 'Boolean',
+        'Resource', 'Reference', 'DestinationCidrBlock' # FIXME: Not sure about these
         define_string_method(parent_klass, property_name, property)
       when 'Array'
         define_array_method(parent_klass, property_name, property)
@@ -57,11 +54,29 @@ module CfnDsl
         define_condition_declaration_method(parent_klass, property_name, property)
         # when 'Named-String'
         #   define_named_string_method(property_name, property, options)
+      when 'Object' # TODO: This is resource specific, should we encode that?
+        property_name = property_name.gsub(/::/, '_').sub(/^AWS_/, '')
+
+        define_named_array_method(parent_klass, property_name, property)
       else
+        ap parent_klass
+        ap property_name
         raise("Can't deal with #{type} yet")
       end
 
-      raise("Didn't process properties #{property.keys}") unless property.empty?
+      # TODO: what can we do with these
+      _disable_refs = property.delete('disable-refs')
+      _disable_functions = property.delete('disable-functions')
+      _resource_ref_type = property.delete('resource-ref-type')
+      _return_values = property.delete('return-values')
+
+      unless property.empty?
+        # p parent_klass
+        # ap property_name
+        # ap type
+        # ap property
+        raise("Didn't process properties #{property.keys}")
+      end
     end
 
     # TODO: Rename to cover String and Number
@@ -91,10 +106,24 @@ module CfnDsl
       parent_klass.const_set(property_name, klass)
 
       array_class = property.delete('array-type')
+      allowed_values = property.delete('allowed-values')
+      resource_ref_type = property.delete('resource-ref-type')
+
+      if array_class == 'Object'
+        if resource_ref_type
+          array_class = resource_ref_type.sub(/^AWS::/, '').gsub(/::/, '_')
+        else
+          klass = define_named_array_method(klass, "#{property_name}Array", property)
+          array_class = klass.to_s
+        end
+      end
 
       parent_klass.class_eval do
         define_method(property_name) do |array|
           Errors.error("Array elements must all be of class #{array_class}", caller) unless array.map { |e| e.class.to_s }.compact.uniq.first == array_class
+          array.each do |value|
+            Errors.error("Array element #{value} must be one of [\"#{allowed_values.join('","')}\"]", caller) unless allowed_values?(value, allowed_values)
+          end
 
           property_obj = klass.new(array)
 
@@ -113,6 +142,8 @@ module CfnDsl
         klass = Types::Output
       when 'Mappings'
         klass = Types::Mapping
+      when 'Conditions'
+        klass = Types::Condition
       else
         klass = Class.new(Types::NamedArray)
         parent_klass.const_set(property_name, klass)
@@ -136,8 +167,24 @@ module CfnDsl
         end
       end
 
-      child_schema = property.delete('default-child-schema')
-      type = child_schema.delete('type')
+      if property['child-schemas']
+        child_schema = {
+          'properties' => property.delete('child-schemas')
+        }
+        type = 'Object'
+      elsif property['properties'] # For Resource Property
+        child_schema = {
+          'properties' => property.delete('properties')
+        }
+        type = 'Object'
+      else # For Resource
+        child_schema = property.delete('default-child-schema')
+        # p parent_klass
+        # p property_name
+        # p property
+        type = child_schema.delete('type')
+      end
+
       child_schema.delete('required') # TODO: Should we validate this somehow?
 
       # Our definitions are better
@@ -366,7 +413,11 @@ module CfnDsl
 
       AWS::Functions.module_eval do
         define_method(method_name) do |*args|
-          Fn.new(function_name, args)
+          if method_name =~ /Fn/
+            Fn.new(function_name, args)
+          else
+            Ref.new(*args)
+          end
         end
       end
 

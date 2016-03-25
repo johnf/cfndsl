@@ -1,5 +1,4 @@
 {
-  "AWSTemplateFormatVersion": "2010-09-09",
   "Mappings": {
     "AWSRegionArch2AMI": {
       "us-east-1": {

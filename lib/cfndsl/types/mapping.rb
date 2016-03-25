@@ -16,6 +16,7 @@ module CfnDsl
       include JSONSerialisableObject
 
       def initialize(value)
+        super()
         @value = value
       end
     end

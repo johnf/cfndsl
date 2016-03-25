@@ -4,9 +4,9 @@ module CfnDsl
   module Types
     # Resource type
     class NamedArray < JSONable
-      def initialize(value)
+      def initialize(value = nil)
         super()
-        @value = value
+        @value = value if value
       end
     end
   end

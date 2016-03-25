@@ -12,19 +12,19 @@ describe CfnDsl do
   end
 end
 
-describe CfnDsl::HeatTemplate do
-  it 'honors last-set value for non-array properties' do
-    spec = self
-    subject.declare do
-      Server('myserver') do
-        flavor 'foo'
-        flavor 'bar'
-        f = @Properties['flavor'].value
-        spec.expect(f).to spec.eq('bar')
-      end
-    end
-  end
-end
+# describe CfnDsl::HeatTemplate do
+#   it 'honors last-set value for non-array properties' do
+#     spec = self
+#     subject.declare do
+#       Server('myserver') do
+#         flavor 'foo'
+#         flavor 'bar'
+#         f = @Properties['flavor'].value
+#         spec.expect(f).to spec.eq('bar')
+#       end
+#     end
+#   end
+# end
 
 describe CfnDsl::CloudFormationTemplate do
   it 'populates an empty template' do
