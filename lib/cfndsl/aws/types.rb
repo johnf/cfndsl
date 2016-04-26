@@ -15,7 +15,7 @@ module CfnDsl
 
         @root = data['root-schema-object']
         @functions = data['intrinsic-functions']
-        @resources = @root['properties']['Resources']
+        @resources = @root['properties'].delete('Resources')
 
         const_set('Root', @root)
         const_set('Resources', @resources)

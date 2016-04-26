@@ -6,12 +6,8 @@ module CfnDsl
     class Resource < JSONable
       def initialize
         super
-        type = self.class.instance_variable_get(:@Type)
-        instance_variable_set(:@Type, type)
-      end
-
-      def self.type=(type)
-        instance_variable_set(:@Type, type)
+        type = self.class.to_s.sub(/^CfnDsl::CloudFormationTemplate::/, '').gsub(/_/, '::')
+        instance_variable_set(:@Type, "AWS::#{type}")
       end
     end
   end

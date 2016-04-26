@@ -11,6 +11,7 @@ require 'cfndsl/types/named_array'
 require 'cfndsl/types/output'
 require 'cfndsl/types/mapping'
 require 'cfndsl/types/condition'
+require 'cfndsl/types/property'
 
 module CfnDsl
   # Cloud Formation Templates
@@ -18,7 +19,7 @@ module CfnDsl
     include AWS::Functions # TODO: Should we include this here?
     include CfnDsl::ConditionFunctions
 
-    def self.root_resources
+    def self.resources
       CfnDsl::AWS::Types::Resources
     end
 
@@ -30,34 +31,55 @@ module CfnDsl
       CfnDsl::AWS::Types::Root
     end
 
-    def self.create_properties(object, parent_klass)
+    def self.create_properties(object, parent_klass, options = {})
       object['properties'].each do |property_name, property|
-        create_property(parent_klass, property_name, property)
+        create_property(parent_klass, property_name, property, options)
       end
     end
 
-    def self.create_property(parent_klass, property_name, property)
-      type = property.delete('type')
+    def self.create_resources
+      resources['child-schemas'].each do |property_name, property|
+        property['type'] = 'RootResource'
+        create_property(self, property_name, property)
+      end
+    end
 
-      parent_klass.add_required(property_name) if property.delete('required')
+    def self.create_property(parent_klass, property_name, property, options = {})
+      return if %w(AWS::Elasticsearch::Domain AWS::WAF::SqlInjectionMatchSet).include?(property_name)
+      type = property.delete('type')
+      type = 'Object' if options[:resource_property]
+
+      required = property.delete('required')
+      parent_klass.add_required(property_name) if required && property_name != 'Resources' # Don't make resources requirred
       parent_klass.add_description(property_name, property.delete('description'))
 
+      if property_name == 'ImageId'
+        p property_name
+        ap property
+        ap options
+        p type
+      end
+
       case type
-      when 'String', 'Number', 'Json', 'Boolean',
+      when 'String', 'Number', 'Json', 'Boolean', 'Policy',
         'Resource', 'Reference', 'DestinationCidrBlock' # FIXME: Not sure about these
         define_string_method(parent_klass, property_name, property)
       when 'Array'
         define_array_method(parent_klass, property_name, property)
-      when 'Named-Array'
-        define_named_array_method(parent_klass, property_name, property)
+      when 'Named-Array', 'Object'
+        define_named_array_method(parent_klass, property_name, property, options)
       when 'ConditionDeclaration'
         define_condition_declaration_method(parent_klass, property_name, property)
-        # when 'Named-String'
-        #   define_named_string_method(property_name, property, options)
-      when 'Object' # TODO: This is resource specific, should we encode that?
+      when 'RootResource'
         property_name = property_name.gsub(/::/, '_').sub(/^AWS_/, '')
 
-        define_named_array_method(parent_klass, property_name, property)
+        # FIXME: Moo
+        if property_name == 'EC2_Instance'
+          define_named_array_method(parent_klass, property_name, property, root_resource: true)
+        else
+          property.delete('properties')
+          property.delete('allowed-values')
+        end
       else
         ap parent_klass
         ap property_name
@@ -69,20 +91,21 @@ module CfnDsl
       _disable_functions = property.delete('disable-functions')
       _resource_ref_type = property.delete('resource-ref-type')
       _return_values = property.delete('return-values')
+      _schema_lookup_property = property.delete('schema-lookup-property')
 
       unless property.empty?
         # p parent_klass
         # ap property_name
         # ap type
         # ap property
-        raise("Didn't process properties #{property.keys}")
+        #raise("Didn't process properties #{property.keys}")
       end
     end
 
     # TODO: Rename to cover String and Number
     def self.define_string_method(parent_klass, property_name, property)
       klass = Class.new(Types::String)
-      parent_klass.const_set(property_name, klass)
+      parent_klass.const_set(property_name, klass) unless property_name =~ /^[a-z]/ # FIXME: Better way to deal with this?
 
       allowed_values = property.delete('allowed-values')
 
@@ -136,7 +159,7 @@ module CfnDsl
       klass
     end
 
-    def self.define_named_array_method(parent_klass, property_name, property)
+    def self.define_named_array_method(parent_klass, property_name, property, options = {})
       case property_name
       when 'Outputs'
         klass = Types::Output
@@ -144,15 +167,34 @@ module CfnDsl
         klass = Types::Mapping
       when 'Conditions'
         klass = Types::Condition
+      when 'Properties'
+        # FIXME: Are we only doing this for top level Resource?
+        # Pull Properties into Resource
+        child_schema = {
+          'properties' => property.delete('properties')
+        }
+        create_properties(child_schema, parent_klass, resource_property: true)
+        return
       else
-        klass = Class.new(Types::NamedArray)
+        if options[:resource_property]
+          klass = Class.new(Types::Property)
+          instance_variable_name = '@Properties'
+        elsif options[:root_resource]
+          klass = Class.new(Types::Resource)
+          instance_variable_name = '@Resources'
+        else
+          klass = Class.new(Types::NamedArray)
+        end
+
         parent_klass.const_set(property_name, klass)
       end
 
-      instance_variable_name = "@#{property_name}"
+      instance_variable_name ||= "@#{property_name}"
+
       method_name = property_name.sub(/s$/, '')
 
       parent_klass.class_eval do
+        # p "#{parent_klass} : #{method_name}"
         define_method(method_name) do |name, *args, &block|
           object = klass.new(*args)
 
@@ -167,6 +209,8 @@ module CfnDsl
         end
       end
 
+      return if options[:resource_property]
+
       if property['child-schemas']
         child_schema = {
           'properties' => property.delete('child-schemas')
@@ -179,10 +223,13 @@ module CfnDsl
         type = 'Object'
       else # For Resource
         child_schema = property.delete('default-child-schema')
+        # p 'MOO'
         # p parent_klass
         # p property_name
         # p property
+        # p child_schema
         type = child_schema.delete('type')
+        options[:resource_property] = true
       end
 
       child_schema.delete('required') # TODO: Should we validate this somehow?
@@ -192,7 +239,7 @@ module CfnDsl
 
       case type
       when 'Object'
-        create_properties(child_schema, klass)
+        create_properties(child_schema, klass, options)
       when 'Json'
         # TODO: This is only really for Mapping, should we capture that?
       else
@@ -221,179 +268,6 @@ module CfnDsl
 
       klass
     end
-
-    # # TODO: Deal with
-    # # - required
-    # # - properties
-    # # - return-values
-    # def self.define_resource_method(resource_name, resource)
-    #   name = resource_name.gsub(/::/, '_').gsub(/^AWS_/, '')
-
-    #   klass = Class.new(Types::Resource)
-    #   klass.type = resource_name
-    #   const_set(name, klass)
-
-    #   define_method(name) do |instance_name, &block|
-    #     resource_obj = klass.new
-    #     @Resources ||= {}
-    #     @Resources[instance_name] = resource_obj
-
-    #     resource_obj.instance_eval(&block) if block
-
-    #     resource_obj
-    #   end
-
-    #   return unless resource_name == 'AWS::EC2::Instance'
-    #   resource['properties'].each do |property_name, property|
-    #     next if %w(Type CreationPolicy Condition DependsOn DeletionPolicy Metadata).include?(property_name)
-    #     p property_name
-
-    #     create_properties(property, klass: klass, object_type: :properties)
-    #   end
-    # end
-
-    # def self.create_properties(parent_property, options = {})
-    #   parent_property['properties'].each do |property_name, property|
-    #     next if property_name == 'SsmAssociations'
-
-    #     type = property['type']
-
-    #     case type
-    #     when 'String'
-    #       define_string_method(property_name, property, options)
-    #     when 'Array'
-    #       define_array_method(property_name, property, options)
-    #     when 'Number'
-    #       define_number_method(property_name, property, options)
-    #     when 'Boolean'
-    #       define_boolean_method(property_name, property, options)
-    #     when 'ConditionDeclaration'
-    #       define_condition_decleration_method(property_name, property, options)
-    #     when 'Object', 'Json', 'Resource'
-    #       puts property_name
-    #       puts "Implement #{type}"
-    #       # TODO: Implement
-    #     else
-    #       raise("Can't deal with #{type} yet")
-    #     end
-    #   end
-    # end
-
-    # # TODO: Deal with
-    # # - type
-    # # - array-type
-    # # - required
-    # # - description
-    # def self.define_array_method(property_name, property, options = {})
-    #   klass = Class.new(Types::Array)
-
-    #   eval_klass = options[:klass] || self
-    #   object_type = options[:object_type] || :instance
-
-    #   allowed_values = property['allowed-values']
-    #   array_class = property['array-type']
-
-    #   # parent_klass.const_set(property_name, klass)
-    #   property_name = property_name.sub(/Fn::/, 'Fn_')
-
-    #   eval_klass.class_eval do
-    #     define_method(property_name) do |array|
-    #       raise(ArgumentError, "Argument #{array} must be one of [\"#{allowed_values.join('","')}\"]", caller) unless allowed_values?(array, allowed_values)
-    #       raise(ArgumentError, "Array elements must be of class #{array_class}", caller) if array_class != 'Json' &&
-    #                                                                                         array.map { |e| e.class.to_s }.compact != array_class
-
-    #       property_obj = klass.new(array)
-
-    #       case object_type
-    #       when :properties
-    #         @Properties ||= {}
-    #         @Properties[property_name] = property_obj
-    #       when :instance
-    #         instance_variable_set(:"@#{property_name}", property_obj)
-    #       else
-    #         raise("Unknown object type #{object_type}")
-    #       end
-
-    #       property_obj
-    #     end
-    #   end
-    # end
-
-    # # TODO: Deal with
-    # # - required
-    # def self.define_number_method(property_name, property, options)
-    #   klass = Class.new(Types::Number)
-
-    #   # parent_klass.const_set(property_name, klass)
-
-    #   eval_klass = options[:klass] || self
-    #   object_type = options[:object_type] || :instance
-
-    #   allowed_values = property['allowed-values']
-
-    #   eval_klass.class_eval do
-    #     define_method(property_name) do |number|
-    #       raise(ArgumentError, "Argument #{string} must be one of [\"#{allowed_values.join('","')}\"]", caller) unless allowed_values?(string, allowed_values)
-    #       raise(ArgumentError, 'Argument must be a number', caller) unless number.is_a?(Integer)
-
-    #       property_obj = klass.new(number)
-
-    #       case object_type
-    #       when :properties
-    #         @Properties ||= {}
-    #         @Properties[property_name] = property_obj
-    #       when :instance
-    #         instance_variable_set(:"@#{property_name}", property_obj)
-    #       else
-    #         raise("Unknown object type #{object_type}")
-    #       end
-
-    #       property_obj
-    #     end
-    #   end
-    # end
-
-    # # TODO: Deal with
-    # # - required
-    # def self.define_boolean_method(property_name, _property, options = {})
-    #   klass = Class.new(Types::Boolean)
-
-    #   eval_klass = options[:klass] || self
-    #   object_type = options[:object_type] || :instance
-
-    #   # parent_klass.const_set(property_name, klass)
-
-    #   eval_klass.class_eval do
-    #     define_method(property_name) do |boolean|
-    #       raise(ArgumentError, 'Argument must be a boolean', caller) unless boolean.is_a?(TrueClass) || boolean.is_a?(FalseClass)
-
-    #       property_obj = klass.new(boolean)
-
-    #       case object_type
-    #       when :properties
-    #         @Properties ||= {}
-    #         @Properties[property_name] = property_obj
-    #       when :instance
-    #         instance_variable_set(:"@#{property_name}", property_obj)
-    #       else
-    #         raise("Unknown object type #{object_type}")
-    #       end
-
-    #       property_obj
-    #     end
-    #   end
-    # end
-
-    # # TODO: Implement these
-    # # - Mappings
-    # # - Metadata
-    # # - Conditions
-    # # - Outputs
-    # def self.create_resources
-    #   root_resources['child-schemas'].each do |resource_name, resource|
-    #     define_resource_method(resource_name, resource)
-    #   end
-    # end
 
     def self.create_functions
       functions.each do |function_name, property|
@@ -426,6 +300,6 @@ module CfnDsl
 
     create_properties(root, self)
     create_functions
-    # create_resources
+    create_resources
   end
 end

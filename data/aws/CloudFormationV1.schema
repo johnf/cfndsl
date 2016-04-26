@@ -8718,6 +8718,7 @@
               "Value": {
                 "type": "String",
                 "required": true,
+                "resource-ref-type": "*",
                 "description": "The value of the setting."
               }
             }
